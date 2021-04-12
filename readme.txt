@@ -1,146 +1,117 @@
-<?php
-/*
-* Plugin Name: Tinychat API
-* Plugin URI: https://wordpress.org/plugins/tc-room-spy/
-* Author: Ruddernation Designs
-* Author URI: https://profiles.wordpress.org/ruddernationdesigns
-* Description: You can use this to search Tinychat profiles/rooms, This contains no CSS! So you may need to add your own custom CSS.
-* Requires at least: WordPress 2.0
-* Tested up to: 5.6
-* Version: 1.3.1
-* License: GNUv3
-* License URI: https://www.gnu.org/licenses/gpl-3.0.en.html
-* Date: 19th December 2020
-*/
-define('COMPARE_VERSION', '1.3.0');
-defined( 'ABSPATH' ) or die( 'Hey, have you seen my spectacles' );
-register_activation_hook(__FILE__, 'rndtc_room_spy_install');
-function rndtc_room_spy_install() {
-	global $wpdb, $wp_version;
-	$post_date = date("Y-m-d H:i:s");
-	$post_date_gmt = gmdate("Y-m-d H:i:s");
-	$sql = "SELECT * FROM ".$wpdb->posts." WHERE post_content LIKE '%[rndtc_room_spy_page]%' AND `post_type` NOT IN('revision') LIMIT 1";
-	$page = $wpdb->get_row($sql, ARRAY_A);
-	if($page == NULL) {
-		$sql ="INSERT INTO ".$wpdb->posts."(
-			post_author, post_date, post_date_gmt, post_content, post_content_filtered, post_title, post_excerpt,  post_status, comment_status, ping_status, post_password, post_name, to_ping, pinged, post_modified, post_modified_gmt, post_parent, menu_order, post_type)
-			VALUES
-			('1', '$post_date', '$post_date_gmt', '[rndtc_room_spy_page]', '', 'tcroomspy', '', 'publish', 'closed', 'closed', '', 'Tinychat API', '', '', '$post_date', '$post_date_gmt', '0', '0', 'page')";
-		$wpdb->query($sql);
-		$post_id = $wpdb->insert_id;
-		$wpdb->query("UPDATE $wpdb->posts SET guid = '" . get_permalink($post_id) . "' WHERE ID = '$post_id'");
-	} else {
-		$post_id = $page['ID'];
-	}
-	update_option('rndtc_room_spy_url', get_permalink($post_id));
-}
-add_filter('the_content', 'wp_show_rndtc_room_spy_page', 52);
-function wp_show_rndtc_room_spy_page($content = '') {
-	if(preg_match("/\[rndtc_room_spy_page]/",$content)) {
-		wp_show_rndtc_room_spy();
-		return "";
-	}
-	return $content;
-}
-function wp_show_rndtc_room_spy() {
-	if(!get_option('rndtc_room_spy_enabled', 0)) 
-	{
-		function getSSLPage($url) {
-			$ch = curl_init();
-			curl_setopt($ch, CURLOPT_HEADER, false);
-    		curl_setopt($ch, CURLOPT_URL, $url);
-    		curl_setopt($ch, CURLOPT_SSLVERSION,3);
-			$result = curl_exec($ch);
-    		curl_close($ch);
-			return $result;
-		}
-		if(isset($_POST['chosen'])) 
-		{
-			$room = $_POST['room'];
-			
-			if(preg_match('/^[a-z0-9]/', $room=strtolower($room))){
-				$room=preg_replace('/[^a-zA-Z0-9]/', '',$room);
-				if (strlen($room) < 3)
-					$room = substr($room, 0, 0);
-				if (strlen($room) > 36)
-					$room = substr(0, 36);
-				
-				function file_get_contents_new($data) 
-				{
-					$curl = curl_init();
-					curl_setopt($curl, CURLOPT_URL, $data);
-    				curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-					curl_setopt($curl, CURLOPT_REFERER, "https://tinychat.com");
-					$new = curl_exec($curl);
-    				curl_close($curl);
-					return $new;
-				}
-				$data=html_entity_decode(file_get_contents_new('https://tinychat.com/api/v1.0/user/profile?username='.$room.''));
-				$new = json_decode($data, true);
-				
-				function file_get_contents_namecheck($nc) 
-				{
-					$curl = curl_init();
-					curl_setopt($curl, CURLOPT_URL, $nc);
-    				curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-					curl_setopt($curl, CURLOPT_REFERER, "https://tinychat.com");
-					$namecheck = curl_exec($curl);
-    				curl_close($curl);
-					return $namecheck;
-				}
-				$nc=html_entity_decode(file_get_contents_new('https://tinychat.com/api/v1.0/user/profile?username='.$room.''));
-				$namecheck = json_decode($nc, true);
-				$data=file_get_contents('https://tinychat.com/api/v1.0/user/profile?username='.$room.'');
-				$roomie = json_decode($data, true);
-			}
-		}
-?>
-<form method="post">
-<input type="text" tabindex="1" name="room" placeholder="Type in the Tinychat room name" id="roomname" list="roomdata" autofocus required/> 
-<input type="hidden" name="chosen" value="true">
-<button type="submit" class="button">Spy</button></form><br>
-<?php
-		
-		if (preg_match('/^[a-z0-9]/', $room=strtolower($room)))
-		{
-			$room=preg_replace('/[^a-zA-Z0-9]/','',$room);
-			{
-				if(isset($_POST['chosen']))
-				{
-					if (!empty($new["result"] == "nouser")) { 
-						echo '<h4><strong>That profile does not exist!</strong></h4>';
-					}
-					elseif
-						($new["result"] == "success")
-					{
-						echo '<br><img src="'.$new["avatarUrl"].'" class="roomimage" alt="'.$new["username"].'"></img><br>';
-						echo '<p><br><strong>Username: ' .$new["username"].'</strong>';
-						$url = '@(http)?(s)?(://)?(([a-zA-Z])([-\w]+\.)+([^\s\.]+[^\s]*)+[^,.\s])@';
-						$new["biography"] = preg_replace($url, '<strong><a href="http$2://$4" target="_blank" title="$0">$0</a></strong>',$new["biography"]);
-						echo '<br><strong>Biography: ' .$new["biography"].'</strong>';
-						
-						if ($new["gender"] == "M")
-						{
-							echo str_replace("M", "", ""), '<br>' ,'<strong>Gender: Male</strong>';
-						}
-						elseif ($new["gender"] == "F")
-						{
-							echo str_replace("F", "", ""), '<br>' ,'<strong>Gender: Female</strong>';
-						}
-						echo '<br><strong>Age: ' .$new["age"].'</strong></strong>';
-						echo '<br><strong>Location: ' .$new["location"].'</strong>';
-						if (!empty($new["role"] == "")) 
-						{
-							echo '<br><strong>Membership: God Mode';
-						}
-						else
-						echo '<br><strong>Membership: ' .$new["role"].'</strong>';
-						echo '<br><strong>Points: ' .$new["giftpoints"]." - ".'To Next Level: '.$new["percentToNextAchieve"].'%</p></strong>';
-						echo '<br><strong><a href="https://www.ruddernation.com/chat">Join Chat</a></strong>';
-					}
-				}
-			}
-		}
-	}
-}
-?>
+=== Tinychat API ===
+
+Contributors: ruddernationdesigns
+Donate link: https://www.paypal.me/RuddernationDesigns
+Tags: Tinychat room spy, Tinychat api, room spy, wordpress chat, buddypress chat, wordpress video chat
+Requires at least: 5.0
+Tested up to: 5.6
+Stable tag: 1.3.1
+License: GNU3 
+License URI: https://www.gnu.org/licenses/gpl-3.0.en.html
+
+== Description ==
+
+* This is now grabbing Tinychat API and displaying the users/rooms details.
+
+== Installation ==
+
+* This will automatically create the page and install the short code with link *domain name/tcroomspy*, If it does not then please read below.
+
+* Simply use shortcode [rndtc_room_spy_page] in a page and publish.
+
+== Notes ==
+
+ * This is no longer the room spy but it gives you the room details.
+
+== Frequently Asked Questions ==
+
+* Q. Can I use this if I'm not logged in?
+* A. Yes.
+
+* Q. How do I add it to my blog/website?
+* A. Just go to the backend and on appearance select menus, From there you can add your page, It'll be *tcroomspy* by default.
+
+== Changelog ==
+
+= 1.0.1 =
+* This will auto create the page for you and insert the shortcode, Just type in the Tinychat room name in the search box and click *Spy*,
+It'll show the images and selected data for who is in the room, number of users and moderators and how many are using video/audio.
+
+= 1.0.2 =
+
+* Fully updated to use Json data instead of XML so errors will no longer be an issues, Also it's much faster to respond.
+
+= 1.0.6 =
+
+* Fixed the over 36 character limit errors, Now anything over 36 charaters will come up with no results, also updated the css.
+
+= 1.0.7 =
+
+* I've had to add a timeout function due to Tinychats servers being unresponsive at times, Change from $names to $users for anyone looking at the code.
+
+= 1.0.8 =
+
+* This is now Deprecated! Apologies to anyone affected, License is now MIT so feel free to carry this plugin on, Just ask me to add you as a contributor, Please use https://www.tinychat-spy.com 
+
+= 1.1.0 =
+
+* This still no longer works but I've removed all the code to stop errors.
+
+= 1.1.3 =
+
+* Removed the URL to the API domain due to an header issue with WordPress.
+
+= 1.1.4 =
+
+* Name change and showing it as 'Depreciated', This does not work anymore! apologize for that.
+
+= 1.1.5 =
+
+* I've now added a `Directory` link.
+
+= 1.1.6 =
+
+* This is no longer working so please use https://www.tinchat.cf/directory to view the users in chat rooms.
+
+= 1.1.7 =
+
+* Tested up to Wordpress 5.0 with no issues.
+
+= 1.1.8 =
+
+* I've still not had time to do this, but I will get around to doing it at some point,
+  So please use https://www.tinchat.cf/directory to see who is on Tinychat, This will show all the rooms and display users images.
+
+= 1.2.0 =
+
+* I'm currently testing a new version of this that I've created and will make it live very soon!
+
+= 1.2.3 =
+
+* Due to unforeseen circumstances I've decided to discontinue this plugin, This is still available on https://www.ruddernation.cf/directory - Ignore!
+
+= 1.2.9 =
+
+* After some time out I've decided to add the Tinychat API as the directory doesn't really work.
+* It's been tested upto WP 5.5 and there was no issues I could find.
+
+= 1.3.1 =
+
+* Tested up to WordPress 5.6 without any issues.
+
+
+== Social Sites ==
+
+* <a href="https://www.ruddernation.com"  rel="nofollow ugc">Developers Website</a>
+
+* <a href="https://profiles.wordpress.org/ruddernationdesigns"  rel="nofollow ugc">WordPress</a>
+
+* <a href="https://tinychat.com" rel="nofollow ugc">Tinychat</a>
+
+* <a href="https://www.ruddernation.com/privacy-policy/" rel="nofollow ugc">Privacy Policy for Ruddernation Designs</a>
+
+* <a href="https://tinychat.com/privacy.html" rel="nofollow ugc">Privacy Policy for Tinychat</a>
+
+== Contact Details ==
+
+* <a href="mailto:support@ruddernation.com" rel="nofollow ugc">Email</a> - Any issues then please contact me here.
